@@ -6,142 +6,151 @@
  */
 
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <vector>
-
+#include <algorithm>
+#include <numeric>
+#include <ctime>
 #include <ParallelTree.hpp>
 
 using namespace std;
 
-// Функция, которую мы максимизируем
-int f(const vector<int>& x)
-{
-    return 5*x[0] + 10*x[1] + 4*x[2] + 3*x[3];
+int f(vector<int> x) { // функция минимизации
+	return accumulate(x.begin(), x.end(), 0);
 }
 
-// Функция, которая проверяет выполнение ограничения
-bool constraint(const vector<int>& x)
-{
-    return 4*x[0] + 7*x[1] + 2*x[2] + 3*x[3] <= 10;
-}
-
-// Рекорд. Должен наследоваться от класса Record и реализовать методы
-// betterThan и clone.
 class ExampleRecord : public Record
 {
 public:
-    ExampleRecord() :
-        x(4, 0)
-    {}
-    
-    // Вектор с решением
-    vector<int> x;
-    
-    /*
-     * Должна возвращать true, если данный рекорд лучше (меньше в задачах
-     * минимизации и больше в задачах максимизации), чем other
-     */
-    bool betterThan(const Record& other) const override
-    {
-        const ExampleRecord& otherCast = static_cast<const ExampleRecord&>(other);
-        // Поскольку у нас задача максимизации, то используем оператор "больше".
-        return f(x) > f(otherCast.x);
-    }
-    
-    // Должен возвращать копию данного рекорда.
-    std::unique_ptr<Record> clone() const override
-    {
-        // Здесь просто используем конструктор копий
-        return std::make_unique<ExampleRecord>(*this);
-    }
+	vector<int> x;
+
+	ExampleRecord(vector<int> x) : x(x) {}
+
+	bool betterThan(const Record& other) const override {
+		const ExampleRecord& otherCast = static_cast<const ExampleRecord&>(other);
+		return f(x) < f(otherCast.x);
+	}
+
+	std::unique_ptr<Record> clone() const override {
+		return std::make_unique<ExampleRecord>(*this);
+	}
 };
 
-// Узел дерева вариантов. Должен наследоваться от класса Node и реализовать
-// методы process и hasHigherPriority.
-class ExampleNode : public Node
-{
+class ExampleNode : public Node {
 public:
-    ExampleNode() :
-        x(4, 0),
-        lastX(-1)
-    {}
-    
-    // Вектор с 4 переменными x.
-    vector<int> x;
-    // Какой x мы меняли последним
-    int lastX;
-    
-    /*
-     * Функция, которая обрабатывает текущий узел и возвращает вектор
-     * потомков этого узла (или пустой вектор, если потомков нет).
-     * 
-     * Она не должна менять глобальных переменных, т.к. она будет исполняться
-     * в нескольких потоках. Рекорд менять можно (при этом синхронизация не
-     * требуется).
-     */
-    std::vector< std::unique_ptr<Node> > process(Record& record) override
-    {
-        ExampleRecord& recordCast = static_cast<ExampleRecord&>(record);
-        
-        // Потомки
-        std::vector< std::unique_ptr<Node> > childNodes;
-        // Если lastX == 3, то мы дошли до листа дерева и потомков у текущего
-        // узла нет.
-        if(lastX == 3)
-        {
-            // Если текущее решение лучше рекорда, то меняем рекорд
-            if(f(x) > f(recordCast.x))
-                recordCast.x = x;
-            // Потомков нет. childNodes пуст.
-            return childNodes;
-        }
-        else
-        {
-            lastX += 1;
-            // Рассматриваем 2 случая: x[lastX] = 0 и x[lastX] = 1
-            x[lastX] = 0;
-            // Если ограничение не выполняется, то отсекаем ветвь.
-            if(constraint(x))
-                childNodes.emplace_back(new ExampleNode(*this));
-            
-            x[lastX] = 1;
-            // Если ограничение не выполняется, то отсекаем ветвь.
-            if(constraint(x))
-                childNodes.emplace_back(new ExampleNode(*this));
-            
-            return childNodes;
-        }
-    }
-    
-    /*
-     * Возвращает true, если приоритет данного задания больше, чем other.
-     * Задания с большим приоритетом будут обрабатываться раньше.
-     */
-    bool hasHigherPriority(const Node& other) const override
-    {
-        const ExampleNode& otherCast = static_cast<const ExampleNode&>(other);
-        // Если у данного узда значение f больше, то считаем что у него больше
-        // приоритет.
-        return f(x) > f(otherCast.x);
-    }
-};
+	vector<int> finalcombination; // получившееся сочетание на каждом листе
+	vector<int> N; // из скольки 
+	int k; // по сколько 
+	int I; // ярус
+	int node;
 
+	ExampleNode(vector<int> N, int k) : N(N), k(k), I(0) {}
+
+	std::vector< std::unique_ptr<Node> > process(Record& record) override
+	{
+
+		ExampleRecord& recordCast = static_cast<ExampleRecord&>(record);
+
+		std::vector< std::unique_ptr<Node> > childNodes;
+
+		if (I == k) {
+			/*cout << endl;
+			for (auto i : finalcombination) cout << i << " ";
+			cout << endl;*/
+			if (f(finalcombination) < f(recordCast.x))
+				recordCast.x = finalcombination;
+			return childNodes;
+		}
+		else {
+			I += 1;
+			vector<int> temp = N;
+			for (int i(0); i < N.size() - k + I; ++i) {
+				temp = N;
+				node = N[i];
+				finalcombination.push_back(node);
+				//if (accumulate(cbb.begin(), cbb.end(), 0) > recordCast.sum) continue;
+				//cout << "+1" << endl;
+				temp.erase(temp.begin() + i);
+				swap(temp, N);
+				childNodes.emplace_back(new ExampleNode(*this));
+				swap(temp, N);
+				finalcombination.pop_back();
+			}
+			return childNodes;
+		}
+	}
+
+	bool hasHigherPriority(const Node& other) const override {
+		const ExampleNode& otherCast = static_cast<const ExampleNode&>(other);
+		return f(finalcombination) < f(otherCast.finalcombination);
+	}
+};
 
 int main()
 {
-    // Полагаем в начале все x равными 0 и начальный рекорд равным 0.
-    ExampleRecord initialRecord;
-    // Корень дерева вариантов.
-    unique_ptr<ExampleNode> root = make_unique<ExampleNode>();
-    // Параллельно находим решение
-    unique_ptr<Record> bestSolution = parallelTree(move(root), initialRecord);
-    const ExampleRecord* bestSolutionCast = reinterpret_cast<const ExampleRecord*>(bestSolution.get());
-    
-    cout << "x0 = " << bestSolutionCast->x[0] << ",  "
-         << "x1 = " << bestSolutionCast->x[1] << ",  "
-         << "x2 = " << bestSolutionCast->x[2] << ",  "
-         << "x2 = " << bestSolutionCast->x[3] << ",  "
-         << endl;
-    
-    return 0;
+	int q = INT_MAX;
+
+	vector<vector<int>> matrix{				// задаем наш граф матрицей смежности
+		{ 0, 12,  q, 28,  q,  q,  q},
+		{ 12, 0, 10, 43,  q,  q,  q},
+		{ q, 10,  0,  q, 10,  q,  q},
+		{ 28,43, 17,  0,  q,  q,  q},
+		{ q, 31, 10,  q,  0,  8,  q},
+		{ q,  q,  q,  q, 14,  0,  6},
+		{ q,  q,  q,  q,  q,  6,  0},
+	};
+	//for (int i(0); i < matrix.size(); ++i) {
+	//	for (int j(0); j < matrix.size(); ++j) {
+	//		cout << setw(2) << matrix[i][j] << "  ";
+	//	}
+	//	cout << endl;
+	//}
+
+	// с помощью алгоритма Флойда — Уоршелла находим длины кратчайших путей между всеми парами вершин
+	for (int k = 0; k < matrix.size(); ++k)
+		for (int i = 0; i < matrix.size(); ++i)
+			for (int j = 0; j < matrix.size(); ++j)
+				if (matrix[i][k] < INT_MAX && matrix[k][j] < INT_MAX)
+					if (matrix[i][k] + matrix[k][j] < matrix[i][j])
+						matrix[i][j] = matrix[i][k] + matrix[k][j];
+
+	for (int i(0); i < matrix.size(); ++i) {	// выводим полную матрицу смежности
+		for (int j(0); j < matrix.size(); ++j) {
+			cout << setw(2) << matrix[i][j] << "  ";
+		}
+		cout << endl;
+	}
+
+	cout << endl;
+	vector<int> CBB; // создаем вектор, каждое значение которого - сумма кратчайших расстояний от данной вершины до всех остальных
+	for (int i = 0; i < matrix.size(); i++) {
+		int sum = 0;
+		for (int j = 0; j < matrix.size(); j++) {
+			sum += matrix[i][j];
+		}
+		CBB.push_back(sum);
+		cout << CBB[i];
+		cout << "\n";
+	}
+	cout << endl << endl;
+	//cout << accumulate(CBB.begin(), CBB.end(), 0);
+	int k = 3;
+	vector<int> resized_for_record = CBB;
+	resized_for_record.resize(k);
+	ExampleRecord initialRecord({ resized_for_record });
+	unique_ptr<ExampleNode> root = make_unique<ExampleNode>(CBB, k);
+	unique_ptr<Record> bestSolution = parallelTree(move(root), initialRecord);
+	const ExampleRecord* bestSolutionCast = reinterpret_cast<const ExampleRecord*>(bestSolution.get());
+
+	for (int i(0); i < bestSolutionCast->x.size(); ++i) {
+		cout << bestSolutionCast->x[i] << "  ";
+	}
+	//cout << endl << f(bestSolutionCast->x, capacity, bestSolutionCast->x.size());
+	cout << endl << "Runtime : " << clock() / 1000.0;
+
+	return 0;
 }
+
+
+
