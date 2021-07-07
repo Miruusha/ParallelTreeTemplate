@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 #include <numeric>
 #include <ctime>
 #include <ParallelTree.hpp>
@@ -59,9 +60,6 @@ public:
 		std::vector< std::unique_ptr<Node> > childNodes;
 
 		if (I == k) {
-			/*cout << endl;
-			for (auto i : p) cout << i << " ";
-			cout << endl;*/
 			if (f(x, p) < f(recordCast.x, recordCast.p))
 				recordCast.p = p;
 			return childNodes;
@@ -73,8 +71,6 @@ public:
 				temp = N;
 				node = N[i];
 				p.push_back(node);
-				//if (accumulate(cbb.begin(), cbb.end(), 0) > recordCast.sum) continue;
-				//cout << "+1" << endl;
 				temp.erase(temp.begin() + i);
 				swap(temp, N);
 				childNodes.emplace_back(new ExampleNode(*this));
@@ -139,16 +135,18 @@ int main()
 	for (int i(0); i < matrix.size(); ++i) N.push_back(i);
 	vector<int> resized_for_record = N;
 	resized_for_record.resize(k);
+	auto t1 = std::chrono::high_resolution_clock::now();
 	ExampleRecord initialRecord(matrix, resized_for_record);
 	unique_ptr<ExampleNode> root = make_unique<ExampleNode>(matrix, N, k);
-	unique_ptr<Record> bestSolution = parallelTree(move(root), initialRecord);
+	unique_ptr<Record> bestSolution = parallelTree(move(root), initialRecord, 4);
 	const ExampleRecord* bestSolutionCast = reinterpret_cast<const ExampleRecord*>(bestSolution.get());
-
+	auto t2 = std::chrono::high_resolution_clock::now();
+	auto tt = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+	cout << endl << "Runtime : " << tt<< endl;
 	for (int i(0); i < bestSolutionCast->p.size(); ++i) {
 		cout << bestSolutionCast->p[i] + 1 << "  ";
 	}
-	//cout << endl << f(bestSolutionCast->x, capacity, bestSolutionCast->x.size());
-	cout << endl << "Runtime : " << clock() / 1000.0;
+	
 
 	return 0;
 }
